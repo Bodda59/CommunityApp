@@ -1,0 +1,168 @@
+Prompt for AI Model: Build a React (Vite) + Tailwind CSS Frontend for ClubOrganization
+
+Project Overview:
+Create a modern, responsive frontend using React (with Vite) and Tailwind CSS for the ClubOrganization backend (Java Spring Boot). The app should be visually appealing, user-friendly, and support JWT-based authentication.
+
+Authentication & JWT Usage:
+- Implement login and registration pages.
+- On successful login, save the JWT token returned by the backend (e.g., in localStorage).
+- For all subsequent API requests, include the JWT token in the Authorization header as Bearer {token}.
+- If the token is missing or invalid, redirect the user to the login page.
+
+API Endpoints:
+
+1. Authentication
+
+Register
+- Endpoint: POST /api/auth/register
+- Input:
+  {
+    "username": "string",
+    "email": "string",
+    "password": "string"
+  }
+- Returns:
+  {
+    "message": "User registered successfully"
+  }
+
+Login
+- Endpoint: POST /api/auth/login
+- Input:
+  {
+    "email": "string",
+    "password": "string"
+  }
+- Returns:
+  {
+    "token": "jwt_token_string",
+    "user": {
+      "id": 1,
+      "username": "string",
+      "email": "string"
+    }
+  }
+- Note: Save the token and send it with every authenticated request.
+
+2. Clubs
+
+Get All Clubs
+- Endpoint: GET /api/clubs
+- Headers: Authorization: Bearer {token}
+- Returns:
+  [
+    {
+      "id": 1,
+      "name": "Chess Club",
+      "description": "A club for chess lovers",
+      "type": "SPORTS"
+    },
+    ...
+  ]
+
+Create Club
+- Endpoint: POST /api/clubs
+- Headers: Authorization: Bearer {token}
+- Input:
+  {
+    "name": "string",
+    "description": "string",
+    "type": "string" // e.g., "SPORTS", "ART", etc.
+  }
+- Returns:
+  {
+    "id": 1,
+    "name": "string",
+    "description": "string",
+    "type": "string"
+  }
+
+3. Membership
+
+Request Membership
+- Endpoint: POST /api/memberships/request
+- Headers: Authorization: Bearer {token}
+- Input:
+  {
+    "clubId": 1
+  }
+- Returns:
+  {
+    "message": "Membership request sent"
+  }
+
+Get My Memberships
+- Endpoint: GET /api/memberships
+- Headers: Authorization: Bearer {token}
+- Returns:
+  [
+    {
+      "clubId": 1,
+      "status": "PENDING" // or "APPROVED", "REJECTED"
+    },
+    ...
+  ]
+
+4. Posts
+
+Get Club Posts
+- Endpoint: GET /api/posts/club/{clubId}
+- Headers: Authorization: Bearer {token}
+- Returns:
+  [
+    {
+      "id": 1,
+      "title": "Welcome to the club!",
+      "content": "First post",
+      "type": "ANNOUNCEMENT",
+      "author": "username",
+      "createdAt": "2024-06-01T12:00:00Z"
+    },
+    ...
+  ]
+
+Create Post
+- Endpoint: POST /api/posts
+- Headers: Authorization: Bearer {token}
+- Input:
+  {
+    "clubId": 1,
+    "title": "string",
+    "content": "string",
+    "type": "string" // e.g., "ANNOUNCEMENT", "EVENT"
+  }
+- Returns:
+  {
+    "id": 1,
+    "title": "string",
+    "content": "string",
+    "type": "string",
+    "author": "username",
+    "createdAt": "2024-06-01T12:00:00Z"
+  }
+
+UI/UX Requirements:
+- Use Tailwind CSS for all styling.
+- Responsive layouts for desktop and mobile.
+- Clean, modern design with clear navigation.
+- Show loading and error states for all API calls.
+- Use modals or toasts for feedback (e.g., success/error messages).
+- Use icons and avatars where appropriate.
+
+Main Pages:
+1. Login/Register
+2. Home (List of Clubs)
+3. Club Details (with posts, members, and join/request button)
+4. My Memberships
+5. Create Club / Create Post
+6. Profile
+
+Technical Notes:
+- Use React Router for navigation.
+- Use Axios or Fetch for API calls, always attaching the JWT token.
+- Store the JWT token securely and check it on app launch to auto-login if valid.
+- Handle loading and error states gracefully.
+- Use TypeScript for type safety.
+
+Summary:
+Build a full-featured, JWT-authenticated, modern React (Vite) + Tailwind CSS frontend for the ClubOrganization backend, following the endpoints and data structures above. Ensure JWT authentication is handled securely and used for all protected endpoints. The app should be visually stunning, user-friendly, and responsive.
