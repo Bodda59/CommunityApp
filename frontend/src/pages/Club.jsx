@@ -11,27 +11,38 @@ function Club() {
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
-  const [requestStatus, setRequestStatus] = useState(null); // null, 'PENDING', 'ACCEPTED', 'REJECTED'
-  const [requests, setRequests] = useState([]); // membership requests
-  const [members, setMembers] = useState([]); // club members
+  const [requestStatus, setRequestStatus] = useState(null);
+  const [requests, setRequests] = useState([]);
+  const [members, setMembers] = useState([]);
   const [showRequests, setShowRequests] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
-  const [modal, setModal] = useState(null); // {type, data}
+  const [modal, setModal] = useState(null);
   const [events, setEvents] = useState([]);
   const [showEventModal, setShowEventModal] = useState(false);
   const [newEvent, setNewEvent] = useState({ title: '', description: '', startTime: '', endTime: '', location: '' });
   const [eventError, setEventError] = useState('');
   const [eventLoading, setEventLoading] = useState(false);
-  const [rsvps, setRsvps] = useState({}); // { [eventId]: { counts: {GOING: 0, NOT_GOING: 0, MAYBE: 0}, userStatus: null } }
-  const [rsvpLists, setRsvpLists] = useState({}); // { [eventId]: [rsvp, ...] }
-  const [rsvpLoading, setRsvpLoading] = useState({}); // { [eventId]: boolean }
-  const [rsvpError, setRsvpError] = useState({}); // { [eventId]: string }
-  const [voterModal, setVoterModal] = useState(null); // {eventId, status, voters: []} or null
-  const [eventDeleteLoading, setEventDeleteLoading] = useState({}); // { [eventId]: boolean }
-  const [eventDeleteError, setEventDeleteError] = useState({}); // { [eventId]: string }
+  const [rsvps, setRsvps] = useState({});
+  const [rsvpLists, setRsvpLists] = useState({});
+  const [rsvpLoading, setRsvpLoading] = useState({});
+  const [rsvpError, setRsvpError] = useState({});
+  const [voterModal, setVoterModal] = useState(null);
+  const [eventDeleteLoading, setEventDeleteLoading] = useState({});
+  const [eventDeleteError, setEventDeleteError] = useState({});
+  const [polls, setPolls] = useState([]);
+  const [pollsLoading, setPollsLoading] = useState(true);
+  const [pollsError, setPollsError] = useState('');
+  const [showCreatePoll, setShowCreatePoll] = useState(false);
+  const [createPollData, setCreatePollData] = useState({ question: '', options: ['', ''], closesAt: '', isAnonymous: false });
+  const [createPollLoading, setCreatePollLoading] = useState(false);
+  const [createPollError, setCreatePollError] = useState('');
+  const [voteLoading, setVoteLoading] = useState({});
+  const [voteError, setVoteError] = useState({});
+  const [userVoted, setUserVoted] = useState({});
   const { id } = useParams();
   const navigate = useNavigate();
   const userId = Number(localStorage.getItem('userId'));
+  const [selectedTab, setSelectedTab] = useState('posts');
 
   useEffect(() => {
     const fetchClubAndPosts = async () => {
@@ -54,11 +65,9 @@ function Club() {
         const postsData = await postsResponse.json();
         setClub(clubData);
         setPosts(postsData);
-        // If admin, fetch requests and members
         if (clubData.admin) {
           fetchRequestsAndMembers(token);
         }
-        // If not a member, check for pending membership request (for private clubs)
         if (!clubData.member && clubData.type === 'PRIVATE') {
           await fetchMembershipRequestStatus(token, id);
         }
@@ -69,13 +78,10 @@ function Club() {
       }
     };
     fetchClubAndPosts();
-    // eslint-disable-next-line
   }, [id]);
 
-  // Fetch requests and members for admin
   const fetchRequestsAndMembers = async (token) => {
     try {
-      // Requests
       const reqRes = await fetch(`http://localhost:8080/api/memberships/club/${id}/requests`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -83,20 +89,16 @@ function Club() {
         const allRequests = await reqRes.json();
         setRequests(allRequests);
       }
-      // Members (simulate: fetch all users with accepted status for this club)
       const clubRes = await fetch(`http://localhost:8080/api/clubs/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (clubRes.ok) {
         const clubData = await clubRes.json();
-        setMembers(clubData.members || []); // expects backend to return members array
+        setMembers(clubData.members || []);
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   };
 
-  // Accept/Reject membership request
   const handleProcessRequest = async (requestId, accept) => {
     setActionLoading(true);
     setActionError('');
@@ -115,7 +117,6 @@ function Club() {
     }
   };
 
-  // Promote member to admin
   const handlePromote = async (userId) => {
     setActionLoading(true);
     setActionError('');
@@ -131,9 +132,7 @@ function Club() {
       });
       if (!response.ok) throw new Error('Failed to promote member');
       setMembers(members.map(m => m.id === userId ? { ...m, admin: true } : m));
-      // If the current user promoted themselves, re-fetch club data to update admin UI
       if (userId === userId) {
-        // Re-fetch club data
         setIsLoading(true);
         try {
           const clubResponse = await fetch(`http://localhost:8080/api/clubs/${id}`, {
@@ -154,7 +153,6 @@ function Club() {
     }
   };
 
-  // Kick member
   const handleKick = async (userId) => {
     setActionLoading(true);
     setActionError('');
@@ -173,7 +171,6 @@ function Club() {
     }
   };
 
-  // Edit/Delete post (assume endpoints exist)
   const handleDeletePost = async (postId) => {
     setActionLoading(true);
     setActionError('');
@@ -192,10 +189,8 @@ function Club() {
     }
   };
 
-  // Fetch membership request status for private clubs
   const fetchMembershipRequestStatus = async (token, clubId) => {
     try {
-      // Get all requests for the user
       const response = await fetch('http://localhost:8080/api/memberships/user/me', {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -203,12 +198,9 @@ function Club() {
       const requests = await response.json();
       const req = requests.find(r => r.clubId === Number(clubId));
       if (req) setRequestStatus(req.status);
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   };
 
-  // Handle follow/join/request
   const handleJoin = async () => {
     setActionLoading(true);
     setActionError('');
@@ -236,7 +228,6 @@ function Club() {
     }
   };
 
-  // Fetch events on load
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -247,7 +238,6 @@ function Club() {
         if (res.ok) {
           const data = await res.json();
           setEvents(data);
-          // Fetch RSVPs for each event
           for (const event of data) {
             fetchEventRsvps(event.id);
           }
@@ -257,7 +247,6 @@ function Club() {
     fetchEvents();
   }, [id]);
 
-  // Fetch RSVPs for an event
   const fetchEventRsvps = async (eventId) => {
     try {
       const token = localStorage.getItem('token');
@@ -266,9 +255,7 @@ function Club() {
       });
       if (res.ok) {
         const data = await res.json();
-        console.log('fetchEventRsvps:', eventId, data, 'userId:', userId); // Debug
         setRsvpLists(prev => ({ ...prev, [eventId]: data }));
-        // Count by status
         const counts = { GOING: 0, NOT_GOING: 0, MAYBE: 0 };
         let userStatus = null;
         data.forEach(rsvp => {
@@ -280,7 +267,6 @@ function Club() {
     } catch (e) {}
   };
 
-  // Create event (admin only)
   const handleCreateEvent = async () => {
     setEventLoading(true);
     setEventError('');
@@ -298,7 +284,6 @@ function Club() {
       if (!res.ok) throw new Error('Failed to create event');
       setShowEventModal(false);
       setNewEvent({ title: '', description: '', startTime: '', endTime: '', location: '' });
-      // Refresh events
       const data = await res.json();
       setEvents(prev => [...prev, data]);
     } catch (err) {
@@ -308,35 +293,29 @@ function Club() {
     }
   };
 
-  // RSVP to event
   const handleRsvp = async (eventId, status) => {
     setRsvpLoading(prev => ({ ...prev, [eventId]: true }));
     setRsvpError(prev => ({ ...prev, [eventId]: '' }));
     try {
       const token = localStorage.getItem('token');
-      console.log('RSVP: sending', { eventId, status });
       const res = await fetch(`http://localhost:8080/api/events/${eventId}/rsvp?status=${status}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      console.log('RSVP: response', res.status);
       if (!res.ok) {
         let msg = 'Failed to RSVP';
         try { msg = await res.text(); } catch {}
-        console.log('RSVP: error', msg);
         setRsvpError(prev => ({ ...prev, [eventId]: msg }));
         return;
       }
       fetchEventRsvps(eventId);
     } catch (e) {
-      console.log('RSVP: network error', e);
       setRsvpError(prev => ({ ...prev, [eventId]: 'Network error' }));
     } finally {
       setRsvpLoading(prev => ({ ...prev, [eventId]: false }));
     }
   };
 
-  // Add a helper to group RSVPs by status
   const groupRsvpsByStatus = (rsvpList = []) => {
     const grouped = { GOING: [], MAYBE: [], NOT_GOING: [] };
     rsvpList.forEach(rsvp => {
@@ -371,54 +350,159 @@ function Club() {
     }
   };
 
+  const fetchPolls = async () => {
+    setPollsLoading(true);
+    setPollsError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8080/api/polls/club/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch polls');
+      const data = await res.json();
+      setPolls(data);
+      const votedMap = {};
+      data.forEach(poll => {
+        if (poll.options.some(opt => Array.isArray(opt.voterIds) && opt.voterIds.includes(userId))) {
+          votedMap[poll.pollId] = true;
+        }
+      });
+      setUserVoted(votedMap);
+    } catch (e) {
+      setPollsError(e.message || 'Failed to fetch polls');
+    } finally {
+      setPollsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPolls();
+    const interval = setInterval(fetchPolls, 30000);
+    return () => clearInterval(interval);
+  }, [id]);
+
+  const handleVote = async (pollId, optionId) => {
+    setVoteLoading(prev => ({ ...prev, [pollId]: true }));
+    setVoteError(prev => ({ ...prev, [pollId]: '' }));
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8080/api/polls/${pollId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ optionId }),
+      });
+      if (!res.ok) {
+        let msg = 'Could not vote.';
+        try { msg = await res.text(); } catch {}
+        throw new Error(msg);
+      }
+      setUserVoted(prev => ({ ...prev, [pollId]: true }));
+      fetchPolls();
+    } catch (e) {
+      setVoteError(prev => ({ ...prev, [pollId]: e.message || 'Could not vote.' }));
+    } finally {
+      setVoteLoading(prev => ({ ...prev, [pollId]: false }));
+    }
+  };
+
+  const handleCreatePoll = async () => {
+    setCreatePollLoading(true);
+    setCreatePollError('');
+    try {
+      if (!createPollData.question || createPollData.options.some(opt => !opt)) {
+        throw new Error('Fill all fields');
+      }
+      const token = localStorage.getItem('token');
+      const payload = {
+        ...createPollData,
+        closesAt: createPollData.closesAt ? new Date(createPollData.closesAt).toISOString() : null,
+      };
+      const res = await fetch(`http://localhost:8080/api/polls/club/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        let msg = 'Could not create poll.';
+        try { msg = await res.text(); } catch {}
+        throw new Error(msg);
+      }
+      setShowCreatePoll(false);
+      setCreatePollData({ question: '', options: ['', ''], closesAt: '', isAnonymous: false });
+      fetchPolls();
+    } catch (e) {
+      setCreatePollError(e.message || 'Could not create poll.');
+    } finally {
+      setCreatePollLoading(false);
+    }
+  };
+
+  const handleDeletePoll = async (pollId) => {
+    setVoteLoading(prev => ({ ...prev, [pollId]: true }));
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`http://localhost:8080/api/polls/${pollId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete poll');
+      fetchPolls();
+    } catch (e) {
+      alert(e.message || 'Failed to delete poll');
+    } finally {
+      setVoteLoading(prev => ({ ...prev, [pollId]: false }));
+    }
+  };
+
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto mt-10 bg-white/10 rounded-2xl shadow-2xl p-8 animate-fade-in">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-3xl font-bold text-indigo-300">{club?.name || 'Club'}</h1>
-        </div>
-        {error && (
-          <div className="bg-red-600/90 text-white p-3 rounded-md text-center mb-6 animate-shake">
-            {error}
-          </div>
-        )}
-        <div className="flex justify-end mb-8">
-          <Button onClick={() => navigate('/dashboard')} variant="primary">
+      <div className="max-w-4xl mx-auto mt-12 p-6 bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl shadow-xl">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-white">{club?.name || 'Club'}</h1>
+          <Button 
+            onClick={() => navigate('/dashboard')} 
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200"
+          >
             Back to Dashboard
           </Button>
         </div>
+        {error && (
+          <div className="bg-red-500/90 text-white p-4 rounded-lg mb-6 animate-pulse">
+            {error}
+          </div>
+        )}
         {isLoading ? (
           <div className="flex justify-center items-center min-h-[200px]">
-            <svg className="animate-spin h-8 w-8 text-indigo-400" viewBox="0 0 24 24">
+            <svg className="animate-spin h-8 w-8 text-indigo-500" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
             </svg>
           </div>
         ) : club ? (
-          <div className="space-y-10 animate-fade-in">
-            <Card
-              avatar={
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-400 to-pink-400 flex items-center justify-center text-3xl font-bold text-white shadow-lg border-4 border-white/30">
+          <div className="space-y-8">
+            <Card className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-2xl font-bold text-white shadow-lg">
                   {club.name[0]}
                 </div>
-              }
-            >
-              <h2 className="text-3xl font-semibold text-white mb-4">{club.name}</h2>
-              <p className="text-gray-300 mb-4">{club.description}</p>
+                <div>
+                  <h2 className="text-2xl font-semibold text-white">{club.name}</h2>
+                  <p className="text-gray-300 text-sm">{club.description}</p>
+                </div>
+              </div>
               <div className="flex gap-2 mb-4">
-                <span className="inline-block px-3 py-1 text-xs font-semibold rounded-full bg-indigo-500/30 text-indigo-200">
+                <span className="pxibb-3 py-1 text-xs font-semibold rounded-full bg-indigo-600/30 text-indigo-100">
                   {club.type}
                 </span>
-                <span className="inline-block px-3 py-1 text-xs font-semibold rounded-full bg-pink-500/30 text-pink-200">
+                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-purple-600/30 text-purple-100">
                   {club.category}
                 </span>
               </div>
-              {/* Membership actions */}
               {!club.member && (
-                <div className="mt-6 flex flex-col items-center">
+                <div className="mt-6 flex flex-col items-start gap-2">
                   {club.type === 'PUBLIC' && (
                     <Button
-                      variant="secondary"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
                       onClick={handleJoin}
                       loading={actionLoading}
                       disabled={actionLoading}
@@ -429,27 +513,31 @@ function Club() {
                   {club.type === 'PRIVATE' && (
                     <>
                       {requestStatus === 'PENDING' ? (
-                        <Button variant="secondary" disabled loading>
+                        <Button 
+                          className="bg-gray-600 text-white px-4 py-2 rounded-lg cursor-not-allowed"
+                          disabled 
+                          loading
+                        >
                           Request Pending
                         </Button>
                       ) : requestStatus === 'ACCEPTED' ? (
                         <span className="text-green-400 font-semibold">Request Accepted</span>
                       ) : requestStatus === 'REJECTED' ? (
-                        <div className="flex flex-col items-center">
-                          <span className="text-red-400 font-semibold mb-2">Request Rejected</span>
+                        <div className="flex flex-col gap-2">
+                          <span className="text-red-400 font-semibold">Request Rejected</span>
                           <Button
-                            variant="secondary"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
                             onClick={handleJoin}
                             loading={actionLoading}
                             disabled={actionLoading}
                           >
                             Request to Join Again
                           </Button>
-                          <span className="text-xs text-gray-400 mt-1">You were previously rejected from this club.</span>
+                          <span className="text-xs text-gray-400">You were previously rejected from this club.</span>
                         </div>
                       ) : (
                         <Button
-                          variant="secondary"
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
                           onClick={handleJoin}
                           loading={actionLoading}
                           disabled={actionLoading}
@@ -460,47 +548,66 @@ function Club() {
                     </>
                   )}
                   {actionError && (
-                    <div className="text-red-400 mt-2 animate-shake">{actionError}</div>
+                    <div className="text-red-400 text-sm">{actionError}</div>
                   )}
                 </div>
               )}
-              {/* Show create post if admin and member */}
               {club.admin && club.member && (
                 <div className="mt-6">
-                  <Button onClick={() => navigate(`/club/${id}/post`)} variant="primary">
+                  <Button 
+                    onClick={() => navigate(`/club/${id}/post`)} 
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"
+                  >
                     Create Post
                   </Button>
                 </div>
               )}
             </Card>
-            {/* Admin Panel */}
             {club && club.admin && (
-              <div className="bg-white/10 rounded-xl p-6 mb-10 shadow-xl animate-fade-in">
-                <h2 className="text-2xl font-bold text-indigo-300 mb-4">Admin Panel</h2>
-                <div className="flex gap-6 mb-4">
-                  <Button variant={showRequests ? 'primary' : 'secondary'} onClick={() => setShowRequests(!showRequests)}>
+              <Card className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6">
+                <h2 className="text-xl font-bold text-white mb-4">Admin Panel</h2>
+                <div className="flex gap-4 mb-4">
+                  <Button 
+                    className={`${showRequests ? 'bg-indigo-600' : 'bg-gray-700'} hover:bg-indigo-700 text-white px-4 py-2 rounded-lg`}
+                    onClick={() => setShowRequests(!showRequests)}
+                  >
                     Membership Requests
                   </Button>
-                  <Button variant={showMembers ? 'primary' : 'secondary'} onClick={() => setShowMembers(!showMembers)}>
+                  <Button 
+                    className={`${showMembers ? 'bg-indigo-600' : 'bg-gray-700'} hover:bg-indigo-700 text-white px-4 py-2 rounded-lg`}
+                    onClick={() => setShowMembers(!showMembers)}
+                  >
                     Members
                   </Button>
                 </div>
                 {showRequests && (
                   <div className="mb-6">
-                    <h3 className="text-lg font-semibold mb-2">Pending Requests</h3>
+                    <h3 className="text-lg font-semibold text-white mb-2">Pending Requests</h3>
                     {requests.length === 0 ? (
                       <div className="text-gray-400">No pending requests.</div>
                     ) : (
                       <ul className="space-y-2">
                         {requests.map(req => (
-                          <li key={req.id} className="flex items-center justify-between bg-gray-900/60 rounded-lg px-4 py-2">
+                          <li key={req.id} className="flex items-center justify-between bg-gray-700/50 rounded-lg px-4 py-2">
                             <span>
-                              <span className="font-semibold text-indigo-200">{req.fullName}</span>
+                              <span className="font-semibold text-white">{req.fullName}</span>
                               <span className="ml-2 text-gray-400 text-sm">{req.email}</span>
                             </span>
                             <div className="flex gap-2">
-                              <Button variant="primary" onClick={() => handleProcessRequest(req.id, true)} loading={actionLoading}>Accept</Button>
-                              <Button variant="secondary" onClick={() => handleProcessRequest(req.id, false)} loading={actionLoading}>Reject</Button>
+                              <Button 
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg"
+                                onClick={() => handleProcessRequest(req.id, true)} 
+                                loading={actionLoading}
+                              >
+                                Accept
+                              </Button>
+                              <Button 
+                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg"
+                                onClick={() => handleProcessRequest(req.id, false)} 
+                                loading={actionLoading}
+                              >
+                                Reject
+                              </Button>
                             </div>
                           </li>
                         ))}
@@ -510,22 +617,36 @@ function Club() {
                 )}
                 {showMembers && (
                   <div>
-                    <h3 className="text-lg font-semibold mb-2">Members</h3>
+                    <h3 className="text-lg font-semibold text-white mb-2">Members</h3>
                     {members.length === 0 ? (
                       <div className="text-gray-400">No members found.</div>
                     ) : (
                       <ul className="space-y-2">
                         {members.map(m => (
-                          <li key={m.id} className="flex items-center justify-between bg-gray-900/60 rounded-lg px-4 py-2">
+                          <li key={m.id} className="flex items-center justify-between bg-gray-700/50 rounded-lg px-4 py-2">
                             <span>
-                              <span className="font-semibold text-indigo-200">{m.fullName}</span>
+                              <span className="font-semibold text-white">{m.fullName}</span>
                               <span className="ml-2 text-gray-400 text-sm">{m.email}</span>
-                              {m.admin && <span className="ml-2 text-xs bg-indigo-500/40 text-indigo-100 px-2 py-1 rounded">Admin</span>}
+                              {m.admin && <span className="ml-2 text-xs bg-indigo-600/50 text-indigo-100 px-2 py-1 rounded">Admin</span>}
                             </span>
                             <div className="flex gap-2">
-                              {!m.admin && <Button variant="primary" onClick={() => handlePromote(m.id)} loading={actionLoading}>Make Admin</Button>}
+                              {!m.admin && (
+                                <Button 
+                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg"
+                                  onClick={() => handlePromote(m.id)} 
+                                  loading={actionLoading}
+                                >
+                                  Make Admin
+                                </Button>
+                              )}
                               {(m.id !== userId && (!m.admin || (m.admin && !club.admin))) && (
-                                <Button variant="secondary" onClick={() => handleKick(m.id)} loading={actionLoading}>Kick</Button>
+                                <Button 
+                                  className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg"
+                                  onClick={() => handleKick(m.id)} 
+                                  loading={actionLoading}
+                                >
+                                  Kick
+                                </Button>
                               )}
                             </div>
                           </li>
@@ -534,46 +655,69 @@ function Club() {
                     )}
                   </div>
                 )}
-                {actionError && <div className="text-red-400 mt-2 animate-shake">{actionError}</div>}
-              </div>
+                {actionError && <div className="text-red-400 mt-2">{actionError}</div>}
+              </Card>
             )}
-            {/* Only show posts if member or public */}
-            {(club.member || club.type === 'PUBLIC') && (
+            <div className="flex justify-center gap-2 mb-6 border-b border-gray-700">
+              {[
+                { key: 'posts', label: 'Posts' },
+                { key: 'events', label: 'Events' },
+                { key: 'polls', label: 'Polls' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  className={`px-6 py-2 font-semibold text-sm transition-colors duration-200
+                    ${selectedTab === tab.key 
+                      ? 'border-b-2 border-indigo-500 text-indigo-400' 
+                      : 'text-gray-400 hover:text-indigo-300'}`}
+                  onClick={() => setSelectedTab(tab.key)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            {selectedTab === 'posts' && (
               <div>
-                <h3 className="text-2xl font-semibold text-white mb-6">Club Posts</h3>
+                <h3 className="text-xl font-semibold text-white mb-4">Club Posts</h3>
                 {posts.length === 0 ? (
                   <p className="text-gray-400 text-center">No posts yet.</p>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {posts.map((post) => (
-                      <Card key={post.id}>
-                        <h4 className="text-xl font-medium text-white mb-1">{post.title}</h4>
-                        <p className="text-gray-300 mb-2">{post.content}</p>
+                      <Card key={post.id} className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6">
+                        <h4 className="text-lg font-medium text-white mb-2">{post.title}</h4>
+                        <p className="text-gray-300 mb-3">{post.content}</p>
                         {post.link && (
                           <a
                             href={post.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-indigo-400 hover:text-indigo-300 underline"
+                            className="text-indigo-400 hover:text-indigo-300 underline text-sm"
                           >
                             {post.link}
                           </a>
                         )}
-                        <div className="flex gap-2 mt-2">
-                          <span className="inline-block px-3 py-1 text-xs font-semibold rounded-full bg-indigo-500/30 text-indigo-200">
+                        <div className="flex gap-2 mt-3">
+                          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-indigo-600/30 text-indigo-100">
                             {post.type}
                           </span>
                           {post.eventDateTime && (
-                            <span className="inline-block px-3 py-1 text-xs font-semibold rounded-full bg-pink-500/30 text-pink-200">
+                            <span className="px-3 py-1 text-xs font-semibold rounded-full bg-purple-600/30 text-purple-100">
                               Event: {new Date(post.eventDateTime).toLocaleString()}
                             </span>
                           )}
                         </div>
-                        {/* Edit/Delete controls for admin */}
                         {club.admin && (
                           <div className="flex gap-2 mt-4">
-                            {/* <Button variant="primary" onClick={() => setModal({type: 'edit', data: post})}>Edit</Button> */}
-                            <Button variant="secondary" onClick={() => handleDeletePost(post.id)} loading={actionLoading}>Delete</Button>
+                            <Button
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg"
+                              onClick={() => {
+                                if (window.confirm('Are you sure you want to delete this post?')) handleDeletePost(post.id);
+                              }}
+                              loading={actionLoading}
+                            >
+                              Delete
+                            </Button>
                           </div>
                         )}
                       </Card>
@@ -582,153 +726,348 @@ function Club() {
                 )}
               </div>
             )}
-            <div className="mt-8">
-              <div className="flex justify-between items-center mb-2">
-                <h2 className="text-2xl font-bold text-indigo-400">Events</h2>
-                {club && club.admin && (
-                  <Button onClick={() => setShowEventModal(true)} variant="primary">+ Create Event</Button>
-                )}
-              </div>
-              {events.length === 0 ? (
-                <div className="text-gray-400">No events yet.</div>
-              ) : (
-                <div className="space-y-4">
-                  {events.map(event => {
-                    const grouped = groupRsvpsByStatus(rsvpLists[event.id]);
-                    return (
-                      <Card key={event.id}>
-                        <div className="flex flex-col md:flex-row md:justify-between md:items-center">
-                          <div>
-                            <div className="font-semibold text-lg text-indigo-200">{event.title}</div>
-                            <div className="text-gray-300">{event.description}</div>
-                            <div className="text-gray-400 text-sm">{event.location} | {event.startTime ? new Date(event.startTime).toLocaleString() : ''} - {event.endTime ? new Date(event.endTime).toLocaleString() : ''}</div>
-                            <div className="text-xs text-gray-500">Created by: {event.createdBy?.name || event.createdBy?.username}</div>
-                          </div>
-                          <div className="mt-4 md:mt-0 md:text-right w-full md:w-auto">
-                            {/* RSVP counts and voters */}
-                            {['GOING', 'MAYBE', 'NOT_GOING'].map(status => (
-                              <div key={status} className="mb-2">
-                                <span className={
-                                  status === 'GOING' ? 'text-green-400' :
-                                  status === 'MAYBE' ? 'text-yellow-400' :
-                                  'text-red-400'
-                                }>
-                                  {status === 'GOING' ? 'Going' : status === 'MAYBE' ? 'Maybe' : 'Not Going'}: {rsvps[event.id]?.counts?.[status] ?? 0}
-                                </span>
-                                {/* Admin: show voters */}
-                                {club && club.admin && grouped[status] && grouped[status].length > 0 && (
-                                  <>
+            {selectedTab === 'events' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-white">Events</h2>
+                  {club && club.admin && (
+                    <Button 
+                      onClick={() => setShowEventModal(true)} 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
+                    >
+                      + Create Event
+                    </Button>
+                  )}
+                </div>
+                {events.length === 0 ? (
+                  <div className="text-gray-400">No events yet.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {events.map(event => {
+                      const grouped = groupRsvpsByStatus(rsvpLists[event.id]);
+                      return (
+                        <Card key={event.id} className="bg-gray-800/80 backdrop-blur-sm rounded-xl p-6">
+                          <div className="flex flex-col md:flex-row md:justify-between md:items-center">
+                            <div>
+                              <div className="font-semibold text-lg text-white">{event.title}</div>
+                              <div className="text-gray-300 text-sm">{event.description}</div>
+                              <div className="text-gray-400 text-sm">{event.location} | {event.startTime ? new Date(event.startTime).toLocaleString() : ''} - {event.endTime ? new Date(event.endTime).toLocaleString() : ''}</div>
+                              <div className="text-xs text-gray-500">Created by: {event.createdBy?.name || event.createdBy?.username}</div>
+                            </div>
+                            <div className="mt-4 md:mt-0 md:text-right w-full md:w-auto">
+                              {['GOING', 'MAYBE', 'NOT_GOING'].map(status => (
+                                <div key={status} className="mb-2">
+                                  <span className={
+                                    status === 'GOING' ? 'text-green-400' :
+                                    status === 'MAYBE' ? 'text-yellow-400' :
+                                    'text-red-400'
+                                  }>
+                                    {status === 'GOING' ? 'Going' : status === 'MAYBE' ? 'Maybe' : 'Not Going'}: {rsvps[event.id]?.counts?.[status] ?? 0}
+                                  </span>
+                                  {club && club.admin && grouped[status] && grouped[status].length > 0 && (
                                     <Button
-                                      size="xs"
-                                      variant="secondary"
-                                      className="ml-2"
+                                      className="ml-2 bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded-lg text-xs"
                                       onClick={() => setVoterModal({ eventId: event.id, status, voters: grouped[status] })}
                                     >
                                       View Voters
                                     </Button>
-                                  </>
-                                )}
-                              </div>
-                            ))}
-                            {/* RSVP buttons, vertical */}
-                            {club && club.member && (
-                              <div className="flex flex-col gap-2 mt-2">
-                                <span className="text-sm">Your RSVP: <b>{rsvps[event.id]?.userStatus ? rsvps[event.id].userStatus : 'None'}</b></span>
-                                <Button size="sm" onClick={() => handleRsvp(event.id, 'GOING')} disabled={rsvpLoading[event.id]}>Going</Button>
-                                <Button size="sm" onClick={() => handleRsvp(event.id, 'MAYBE')} disabled={rsvpLoading[event.id]}>Maybe</Button>
-                                <Button size="sm" onClick={() => handleRsvp(event.id, 'NOT_GOING')} disabled={rsvpLoading[event.id]}>Not Going</Button>
-                                {rsvpError[event.id] && <span className="text-red-400 text-xs mt-1">{rsvpError[event.id]}</span>}
-                              </div>
+                                  )}
+                                </div>
+                              ))}
+                              {club && club.member && (
+                                <div className="flex flex-col gap-2 mt-2">
+                                  <span className="text-sm text-gray-300">Your RSVP: <b>{rsvps[event.id]?.userStatus ? rsvps[event.id].userStatus : 'None'}</b></span>
+                                  <Button 
+                                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-lg text-sm"
+                                    onClick={() => handleRsvp(event.id, 'GOING')} 
+                                    disabled={rsvpLoading[event.id]}
+                                  >
+                                    Going
+                                  </Button>
+                                  <Button 
+                                    className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded-lg text-sm"
+                                    onClick={() => handleRsvp(event.id, 'MAYBE')} 
+                                    disabled={rsvpLoading[event.id]}
+                                  >
+                                    Maybe
+                                  </Button>
+                                  <Button 
+                                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm"
+                                    onClick={() => handleRsvp(event.id, 'NOT_GOING')} 
+                                    disabled={rsvpLoading[event.id]}
+                                  >
+                                    Not Going
+                                  </Button>
+                                  {rsvpError[event.id] && <span className="text-red-400 text-xs mt-1">{rsvpError[event.id]}</span>}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {club.admin && (
+                            <Button
+                              className="mt-4 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-lg text-xs"
+                              onClick={() => handleDeleteEvent(event.id)}
+                              loading={eventDeleteLoading[event.id]}
+                            >
+                              Delete Event
+                            </Button>
+                          )}
+                          {eventDeleteError[event.id] && <span className="text-red-400 text-xs ml-2">{eventDeleteError[event.id]}</span>}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {selectedTab === 'polls' && (
+              <div>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-bold text-white">Polls</h2>
+                  {club && club.admin && (
+                    <Button 
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
+                      onClick={() => setShowCreatePoll(true)}
+                    >
+                      Create Poll
+                    </Button>
+                  )}
+                </div>
+                {pollsLoading ? (
+                  <div className="text-gray-400">Loading polls...</div>
+                ) : pollsError ? (
+                  <div className="text-red-500">{pollsError}</div>
+                ) : (
+                  <div>
+                    {polls.length === 0 && <div className="text-gray-400">No polls yet.</div>}
+                    {polls.map((poll, idx) => {
+                      const closesAtDate = poll.closesAt ? new Date(poll.closesAt) : null;
+                      const isOpen = !closesAtDate || closesAtDate > new Date();
+                      return (
+                        <Card 
+                          key={poll.pollId} 
+                          className={`bg-gray-800/80 backdrop-blur-sm rounded-xl p-6 ${idx > 0 ? 'mt-6' : ''}`}
+                        >
+                          <div className="font-semibold text-lg text-white mb-2">{poll.question}</div>
+                          <div className="mb-3">
+                            {isOpen ? (
+                              <span className="text-green-400 font-semibold">
+                                Open{closesAtDate ? ` until ${closesAtDate.toLocaleString()}` : ''}
+                              </span>
+                            ) : (
+                              <span className="text-red-400 font-semibold">Closed</span>
                             )}
                           </div>
-                        </div>
-                        {club.admin && (
-                          <Button
-                            size="xs"
-                            variant="danger"
-                            className="ml-2"
-                            onClick={() => handleDeleteEvent(event.id)}
-                            loading={eventDeleteLoading[event.id]}
-                          >
-                            Delete Event
-                          </Button>
-                        )}
-                        {eventDeleteError[event.id] && <span className="text-red-400 text-xs ml-2">{eventDeleteError[event.id]}</span>}
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                          {isOpen && userVoted[poll.pollId] && (
+                            <Button
+                              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg mb-3"
+                              onClick={() => setUserVoted(prev => ({ ...prev, [poll.pollId]: false }))}
+                            >
+                              Change Vote
+                            </Button>
+                          )}
+                          {poll.isClosed || userVoted[poll.pollId] ? (
+                            <div>
+                              <div className="mb-2 text-sm text-gray-400">Results:</div>
+                              {poll.options.map(opt => (
+                                <div key={opt.id} className="flex items-center mb-2">
+                                  <span className="w-2/3 text-gray-200">{opt.text}</span>
+                                  <span className="ml-2 font-bold text-indigo-400">{opt.voteCount}</span>
+                                  <div className="ml-4 w-1/3 bg-gray-700 rounded h-3">
+                                    <div
+                                      className="bg-indigo-500 h-3 rounded"
+                                      style={{ width: poll.totalVotes ? `${(opt.voteCount / poll.totalVotes) * 100}%` : '0%' }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              ))}
+                              <div className="text-xs text-gray-500">Total votes: {poll.totalVotes}</div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {poll.options.map(opt => (
+                                <Button
+                                  key={opt.id}
+                                  className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg flex items-center"
+                                  disabled={voteLoading[poll.pollId]}
+                                  onClick={() => handleVote(poll.pollId, opt.id)}
+                                >
+                                  {opt.text}
+                                  <span className="ml-2 text-xs text-indigo-400">({opt.voteCount})</span>
+                                </Button>
+                              ))}
+                              {voteError[poll.pollId] && <div className="text-red-400 text-xs mt-2 w-full">{voteError[poll.pollId]}</div>}
+                            </div>
+                          )}
+                          {club && club.admin && (
+                            <Button
+                              className="mt-4 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg"
+                              onClick={() => {
+                                if (window.confirm('Are you sure you want to delete this poll?')) handleDeletePoll(poll.pollId);
+                              }}
+                            >
+                              Delete Poll
+                            </Button>
+                          )}
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
-          <div className="text-center text-gray-400 text-lg animate-fade-in">Club not found.</div>
+          <div className="text-center text-gray-400 text-lg">Club not found.</div>
         )}
       </div>
-      {/* Event creation modal */}
       {showEventModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-          <div className="bg-gray-900 p-8 rounded-xl w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-indigo-200">Create Event</h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-8 rounded-xl w-full max-w-md">
+            <h2 className="text-xl font-bold text-white mb-4">Create Event</h2>
             <input
-              className="w-full mb-3 px-3 py-2 rounded bg-gray-800 text-white focus:outline-none"
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Title"
               value={newEvent.title}
               onChange={e => setNewEvent({ ...newEvent, title: e.target.value })}
             />
             <textarea
-              className="w-full mb-3 px-3 py-2 rounded bg-gray-800 text-white focus:outline-none"
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Description"
               value={newEvent.description}
               onChange={e => setNewEvent({ ...newEvent, description: e.target.value })}
             />
             <input
-              className="w-full mb-3 px-3 py-2 rounded bg-gray-800 text-white focus:outline-none"
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               placeholder="Location"
               value={newEvent.location}
               onChange={e => setNewEvent({ ...newEvent, location: e.target.value })}
             />
             <input
-              className="w-full mb-3 px-3 py-2 rounded bg-gray-800 text-white focus:outline-none"
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               type="datetime-local"
               value={newEvent.startTime}
               onChange={e => setNewEvent({ ...newEvent, startTime: e.target.value })}
             />
             <input
-              className="w-full mb-3 px-3 py-2 rounded bg-gray-800 text-white focus:outline-none"
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               type="datetime-local"
               value={newEvent.endTime}
               onChange={e => setNewEvent({ ...newEvent, endTime: e.target.value })}
             />
             {eventError && <div className="text-red-400 mb-2">{eventError}</div>}
             <div className="flex gap-2 mt-4">
-              <Button onClick={handleCreateEvent} variant="primary" disabled={eventLoading}>Create</Button>
-              <Button onClick={() => setShowEventModal(false)} variant="secondary">Cancel</Button>
+              <Button 
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
+                onClick={handleCreateEvent} 
+                disabled={eventLoading}
+              >
+                Create
+              </Button>
+              <Button 
+                className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
+                onClick={() => setShowEventModal(false)}
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </div>
       )}
-      {/* Voter Modal for Admins */}
       {voterModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setVoterModal(null)}>
-          <div className="bg-gray-900 p-8 rounded-xl w-full max-w-md relative" onClick={e => e.stopPropagation()}>
-            <button className="absolute top-2 right-2 text-gray-400 hover:text-white" onClick={() => setVoterModal(null)}>&times;</button>
-            <h2 className="text-xl font-bold mb-4 text-indigo-200">Voters for {voterModal.status === 'GOING' ? 'Going' : voterModal.status === 'MAYBE' ? 'Maybe' : 'Not Going'}</h2>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={() => setVoterModal(null)}>
+          <div className="bg-gray-800 p-8 rounded-xl w-full max-w-md relative" onClick={e => e.stopPropagation()}>
+            <button 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-xl" 
+              onClick={() => setVoterModal(null)}
+            >
+              ×
+            </button>
+            <h2 className="text-xl font-bold text-white mb-4">Voters for {voterModal.status === 'GOING' ? 'Going' : voterModal.status === 'MAYBE' ? 'Maybe' : 'Not Going'}</h2>
             {voterModal.voters.length === 0 ? (
               <div className="text-gray-400">No voters.</div>
             ) : (
               <ul className="space-y-2">
                 {voterModal.voters.map(u => (
-                  <li key={u.id} className="flex items-center gap-2 bg-gray-800 rounded px-3 py-2">
-                    <div className="w-8 h-8 rounded-full bg-indigo-700 flex items-center justify-center text-white font-bold text-sm">
+                  <li key={u.id} className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
                       {u.name ? u.name[0] : u.username[0]}
                     </div>
-                    <span className="font-semibold text-indigo-100">{u.name || u.username}</span>
+                    <span className="font-semibold text-white">{u.name || u.username}</span>
                     <span className="text-xs text-gray-400">@{u.username}</span>
                   </li>
                 ))}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+      {showCreatePoll && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 p-8 rounded-xl w-full max-w-md relative">
+            <button 
+              className="absolute top-4 right-4 text-gray-400 hover:text-white text-xl" 
+              onClick={() => setShowCreatePoll(false)}
+            >
+              ×
+            </button>
+            <h3 className="text-xl font-bold text-white mb-4">Create Poll</h3>
+            <input
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Question"
+              value={createPollData.question}
+              onChange={e => setCreatePollData({ ...createPollData, question: e.target.value })}
+            />
+            {createPollData.options.map((opt, idx) => (
+              <input
+                key={idx}
+                className="w-full mb-2 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder={`Option ${idx + 1}`}
+                value={opt}
+                onChange={e => {
+                  const newOpts = [...createPollData.options];
+                  newOpts[idx] = e.target.value;
+                  setCreatePollData({ ...createPollData, options: newOpts });
+                }}
+              />
+            ))}
+            <Button
+              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded-lg mb-3"
+              onClick={() => setCreatePollData({ ...createPollData, options: [...createPollData.options, ''] })}
+            >
+              Add Option
+            </Button>
+            <input
+              type="datetime-local"
+              className="w-full mb-3 px-4 py-2 rounded-lg bg-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={createPollData.closesAt}
+              onChange={e => setCreatePollData({ ...createPollData, closesAt: e.target.value })}
+            />
+            <label className="flex items-center mb-3 text-gray-200">
+              <input
+                type="checkbox"
+                checked={createPollData.isAnonymous}
+                onChange={e => setCreatePollData({ ...createPollData, isAnonymous: e.target.checked })}
+                className="mr-2 rounded text-indigo-500 focus:ring-indigo-500"
+              />
+              Anonymous Voting
+            </label>
+            {createPollError && <div className="text-red-400 mb-2">{createPollError}</div>}
+            <div className="flex justify-end gap-2">
+              <Button 
+                className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
+                onClick={() => setShowCreatePoll(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg"
+                onClick={handleCreatePoll} 
+                disabled={createPollLoading}
+              >
+                {createPollLoading ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
